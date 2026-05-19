@@ -10,7 +10,8 @@ const state = {
   theme: 'dark',          // 'dark' | 'light'
   userProfile: {
     name: ''              // user's nickname
-  }
+  },
+  typingTimeoutId: null   // tracks active typing timeout to prevent duplicates/stuck states
 };
 
 // Language Detection Helper
@@ -160,6 +161,13 @@ function handleNameSubmit() {
 }
 
 function navigateToChat(character) {
+  if (state.typingTimeoutId) {
+    clearTimeout(state.typingTimeoutId);
+    state.typingTimeoutId = null;
+  }
+  hideTypingIndicator();
+  setChatInputState(true);
+
   state.activeCharacter = character;
   state.history = [];
   
@@ -187,6 +195,13 @@ function navigateToChat(character) {
 }
 
 function navigateToLanding() {
+  if (state.typingTimeoutId) {
+    clearTimeout(state.typingTimeoutId);
+    state.typingTimeoutId = null;
+  }
+  hideTypingIndicator();
+  setChatInputState(true);
+
   state.activeCharacter = null;
   state.pendingCharacter = null;
   
@@ -196,6 +211,29 @@ function navigateToLanding() {
   elements.chatView.classList.add('hidden');
   elements.nameModalOverlay.classList.add('hidden');
   elements.landingView.classList.remove('hidden');
+}
+
+// Enable/Disable chat input and update placeholder depending on typing state
+function setChatInputState(enabled, characterName = '') {
+  elements.chatInputText.disabled = !enabled;
+  elements.sendMessageBtn.disabled = !enabled || elements.chatInputText.value.trim().length === 0;
+  
+  if (enabled) {
+    elements.chatInputText.placeholder = "say something...";
+  } else if (characterName) {
+    const nameFormatted = characterName.charAt(0).toUpperCase() + characterName.slice(1);
+    elements.chatInputText.placeholder = `${nameFormatted} is typing...`;
+  }
+}
+
+// Render clean, non-technical companion immersive errors inside peer bubble
+function renderImmersiveError(characterName) {
+  const nameFormatted = characterName.charAt(0).toUpperCase() + characterName.slice(1);
+  const msg = Math.random() > 0.5 
+    ? `connection got weird for a moment...` 
+    : `${nameFormatted} disappeared for a second 😭`;
+  
+  renderMessage('model', msg);
 }
 
 // ==========================================================================
@@ -231,30 +269,93 @@ function hideTypingIndicator() {
   elements.typingIndicator.classList.add('hidden');
 }
 
-// Generate human-like timing delay based on text length
+// Generate organic, imperfect, and human-like timing delay based on length, emotional weight, and random micro-pauses.
 function calculateTextDelay(text) {
   const len = text.length;
-  // Standard math settings:
-  // Short replies (<40 char): 1-2 sec
-  // Medium replies (40-150 char): 2.5-4 sec
-  // Long replies (>150 char): 5-8 sec
-  let delay = 2000;
   
-  if (len < 40) {
-    delay = 1000 + Math.random() * 1000;
-  } else if (len >= 40 && len < 150) {
-    delay = 2500 + Math.random() * 1500;
-  } else {
-    delay = 5000 + Math.random() * 3000;
+  // 1. Base timing using a dynamic human-like typing range (20ms to 40ms per character) plus randomized start jitter
+  let delay = 600 + Math.random() * 500 + (len * (20 + Math.random() * 20));
+  
+  // 2. Emotional Weight Analysis
+  const lowercaseText = text.toLowerCase();
+  
+  // Thoughtful/Emotional cues: ellipses, soft punctuation, emotional words
+  const emotionalKeywords = [
+    'think', 'feel', 'understand', 'sorry', 'sad', 'happy', 'love', 'lonely', 'miss',
+    'comfort', 'warm', 'care', 'promise', 'wish', 'dream', 'always', 'night', 'heart'
+  ];
+  const emotionalEmojis = ['🥺', '😭', '✨', '💜', '🤍', '🫂', '❤️', '💕', '💌'];
+  
+  let emotionalWeight = 1.0;
+  
+  // Check emotional words
+  let emotionalWordCount = 0;
+  emotionalKeywords.forEach(word => {
+    if (lowercaseText.includes(word)) emotionalWordCount++;
+  });
+  
+  // Check emotional emojis
+  let emotionalEmojiCount = 0;
+  emotionalEmojis.forEach(emoji => {
+    if (text.includes(emoji)) emotionalEmojiCount++;
+  });
+  
+  // Count ellipses
+  const ellipsisCount = (lowercaseText.match(/\.\.\./g) || []).length;
+  
+  // Adjust weight based on depth markers
+  if (emotionalWordCount > 0 || emotionalEmojiCount > 0 || ellipsisCount > 0) {
+    // Increase delay for thoughtful, deep, or emotional replies
+    emotionalWeight += (emotionalWordCount * 0.08) + (emotionalEmojiCount * 0.12) + (ellipsisCount * 0.15);
   }
   
-  // Safety cap at 9 seconds
-  return Math.min(delay, 9000);
+  // Playful/Fast cues: laughters, casual slang, rapid emojis
+  const playfulKeywords = ['lol', 'haha', 'hehe', 'pfft', 'lmao', 'xd', 'yeah', 'yo', 'hey', 'bro', 'dude'];
+  const playfulEmojis = ['😂', '💀', '🤣', '😜', '😎', '👀'];
+  
+  let playfulWeight = 1.0;
+  let playfulWordCount = 0;
+  playfulKeywords.forEach(word => {
+    if (lowercaseText.includes(word)) playfulWordCount++;
+  });
+  
+  let playfulEmojiCount = 0;
+  playfulEmojis.forEach(emoji => {
+    if (text.includes(emoji)) playfulEmojiCount++;
+  });
+  
+  if (playfulWordCount > 0 || playfulEmojiCount > 0) {
+    // Decrease delay slightly for fast/playful texting
+    playfulWeight -= (playfulWordCount * 0.05) + (playfulEmojiCount * 0.08);
+    // Cap minimum playful reduction
+    playfulWeight = Math.max(0.75, playfulWeight);
+  }
+  
+  // Apply weights
+  delay = delay * emotionalWeight * playfulWeight;
+  
+  // 3. Occasional Organic Micro-Pauses (simulating hesitating, thinking, or looking at the input)
+  // Applied ~35% of the time, adds an additional 400ms to 1200ms
+  if (Math.random() < 0.35) {
+    const microPause = 400 + Math.random() * 800;
+    delay += microPause;
+  }
+  
+  // 4. Bound the delay organically (minimum 1.0s, maximum 9.5s)
+  return Math.min(Math.max(delay, 1000), 9500);
 }
+
 
 // Auto-greeting trigger
 async function triggerInitialGreeting() {
+  // Clear any existing typing timeouts
+  if (state.typingTimeoutId) {
+    clearTimeout(state.typingTimeoutId);
+    state.typingTimeoutId = null;
+  }
+
   showTypingIndicator();
+  setChatInputState(false, state.activeCharacter || 'leo');
   
   const detectedLang = detectUserLanguage();
   const promptText = `(System: The user has just opened the chat room. Automatically reply with a warm, casual greeting matching your core personality in their browser language. My detected language is: ${detectedLang}. Keep it short, casual, and highly welcoming, e.g., asking how my day was or how I am doing. Do not say "How can I help you?". Just act like a friend saying hello. User's nickname is: ${state.userProfile.name || 'none'})`;
@@ -269,20 +370,21 @@ async function triggerInitialGreeting() {
     // Hold greeting to simulate realistic reading/typing delay
     const waitTime = Math.max(0, targetDelay - elapsed);
     
-    setTimeout(() => {
+    state.typingTimeoutId = setTimeout(() => {
       hideTypingIndicator();
+      setChatInputState(true);
       renderMessage('model', reply);
       
       // Save greeting to history so the model knows what it said
       state.history.push({ role: 'model', text: reply });
+      state.typingTimeoutId = null;
     }, waitTime);
     
   } catch (error) {
     hideTypingIndicator();
+    setChatInputState(true);
     console.error('Failed to trigger greeting:', error);
-    renderMessage('model', state.activeCharacter === 'leo' 
-      ? 'yo, sorry, my mind went blank for a second. what\'s up?' 
-      : 'hey, sorry about that! my mind drifted. how are you doing?');
+    renderImmersiveError(state.activeCharacter || 'leo');
   }
 }
 
@@ -331,10 +433,16 @@ async function handleUserSendMessage() {
   const text = elements.chatInputText.value.trim();
   if (!text) return;
   
-  // 1. Clear Input
+  // Clear any existing typing timeouts
+  if (state.typingTimeoutId) {
+    clearTimeout(state.typingTimeoutId);
+    state.typingTimeoutId = null;
+  }
+
+  // 1. Clear Input and Disable State
   elements.chatInputText.value = '';
   elements.chatInputText.style.height = 'auto'; // Reset text area height
-  elements.sendMessageBtn.disabled = true;
+  setChatInputState(false, state.activeCharacter || 'leo');
   
   // 2. Render User Message
   renderMessage('user', text);
@@ -353,47 +461,20 @@ async function handleUserSendMessage() {
     const targetDelay = calculateTextDelay(reply);
     const waitTime = Math.max(0, targetDelay - elapsed);
     
-    setTimeout(() => {
+    state.typingTimeoutId = setTimeout(() => {
       hideTypingIndicator();
+      setChatInputState(true);
       renderMessage('model', reply);
       state.history.push({ role: 'model', text: reply });
+      state.typingTimeoutId = null;
     }, waitTime);
     
   } catch (error) {
     hideTypingIndicator();
+    setChatInputState(true);
     console.error('Chat error:', error);
-    
-    if (error.message === 'API_KEY_MISSING') {
-      renderSystemError(
-        'api-key-error',
-        'Gemini API key is not configured on the server. Please add your GEMINI_API_KEY to the server `.env` file.'
-      );
-    } else {
-      renderSystemError(
-        'network-error',
-        'Sorry, my thoughts got a bit tangled up. Can you say that again?'
-      );
-    }
+    renderImmersiveError(state.activeCharacter || 'leo');
   }
-}
-
-// Render an inline warning or instruction message inside the chat stream
-function renderSystemError(id, text) {
-  const row = document.createElement('div');
-  row.className = 'message-row peer';
-  row.id = id;
-  
-  const bubble = document.createElement('div');
-  bubble.className = 'message-bubble system-warning';
-  bubble.style.backgroundColor = 'rgba(230, 57, 70, 0.1)';
-  bubble.style.borderColor = 'rgba(230, 57, 70, 0.2)';
-  bubble.style.color = 'var(--text-primary)';
-  bubble.style.border = '1px dashed rgba(230, 57, 70, 0.3)';
-  bubble.textContent = text;
-  
-  row.appendChild(bubble);
-  elements.chatMessagesWrapper.appendChild(row);
-  scrollToBottom();
 }
 
 // ==========================================================================

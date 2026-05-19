@@ -563,28 +563,36 @@ body {
   background-color: var(--chat-bubble-peer);
   border: 1px solid var(--chat-bubble-border-peer);
   border-radius: var(--border-radius-md) var(--border-radius-md) var(--border-radius-md) 4px;
-  padding: 12px 20px;
+  padding: 14px 22px;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  animation: typingBubbleFloat 3s infinite ease-in-out;
+  box-shadow: var(--shadow-sm);
 }
 
 .typing-indicator-bubble .dot {
-  width: 6px;
-  height: 6px;
-  background-color: var(--text-muted);
+  width: 7px;
+  height: 7px;
+  background-color: var(--text-accent);
   border-radius: 50%;
-  opacity: 0.3;
-  animation: pulseDot 1.4s infinite ease-in-out;
+  opacity: 0.4;
+  transform: translateY(0);
+  animation: typingDotBounce 1.4s infinite ease-in-out;
+}
+
+.typing-indicator-bubble .dot:nth-child(1) {
+  animation-delay: 0s;
 }
 
 .typing-indicator-bubble .dot:nth-child(2) {
-  animation-delay: 0.2s;
+  animation-delay: 0.25s;
 }
 
 .typing-indicator-bubble .dot:nth-child(3) {
-  animation-delay: 0.4s;
+  animation-delay: 0.5s;
 }
+
 
 /* Floating Input bar */
 .chat-input-bar {
@@ -811,17 +819,32 @@ body {
   }
 }
 
-/* Dot typing animation pulsing */
-@keyframes pulseDot {
+/* Staggered bounce with opacity and scaling */
+@keyframes typingDotBounce {
   0%, 100% {
-    transform: scale(0.8);
-    opacity: 0.3;
+    transform: translateY(0) scale(1);
+    opacity: 0.4;
   }
-  50% {
-    transform: scale(1.1);
+  30% {
+    transform: translateY(-5px) scale(1.1);
     opacity: 1;
   }
+  60% {
+    transform: translateY(1px) scale(0.95);
+    opacity: 0.3;
+  }
 }
+
+/* Breathing floating animation for the bubble */
+@keyframes typingBubbleFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
 
 /* Mobile Responsiveness Rules */
 @media (max-width: 600px) {
