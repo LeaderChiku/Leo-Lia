@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leo & Lia — A quiet internet corner</title>
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="A minimalist internet corner for emotional and casual conversations with Leo and Lia. Casual, comforting, and real.">
+  <meta name="keywords" content="emotional AI, minimal chat, calm companion, aesthetic chat, Leo, Lia">
+  <meta name="author" content="Leo & Lia">
+  
+  <!-- Premium Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Outfit:wght@100..900&display=swap" rel="stylesheet">
+  
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="index.css">
+</head>
+<body class="theme-leo-dark"> <!-- Default default is dark Leo theme -->
+  <!-- Subtle gradient background canvas or backing overlay -->
+  <div class="bg-gradient-overlay" id="bgGradientOverlay"></div>
+
+  <!-- Landing Screen -->
+  <main class="view-container" id="landingView">
+    <div class="landing-content">
+      <h1 class="landing-title fade-in-up">Who do you wanna talk to?</h1>
+      
+      <div class="character-selector fade-in-up-delay">
+        <!-- Leo Option Card -->
+        <button type="button" class="character-card" id="selectLeoBtn" data-character="leo" aria-label="Talk to Leo">
+          <div class="card-inner-horizontal">
+            <div class="avatar-frame">
+              <div class="avatar-clip-wrapper">
+                <img src="leo.png" alt="Leo" class="card-avatar">
+              </div>
+            </div>
+            <span class="character-name">Leo</span>
+          </div>
+        </button>
+
+        <!-- Lia Option Card -->
+        <button type="button" class="character-card" id="selectLiaBtn" data-character="lia" aria-label="Talk to Lia">
+          <div class="card-inner-horizontal">
+            <div class="avatar-frame">
+              <div class="avatar-clip-wrapper">
+                <img src="lia.png" alt="Lia" class="card-avatar">
+              </div>
+            </div>
+            <span class="character-name">Lia</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Chat Screen (Initially Hidden) -->
+  <main class="view-container hidden" id="chatView">
+    <!-- Clean Minimal Header -->
+    <header class="chat-header">
+      <button type="button" class="header-action-btn" id="backToLandingBtn" aria-label="Back to selection">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-left">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </button>
+
+      <!-- Active Partner Label -->
+      <div class="active-partner">
+        <div class="header-avatar-frame">
+          <div class="header-avatar-clip-wrapper">
+            <img src="leo.png" alt="Leo" id="headerPartnerAvatar" class="header-partner-avatar">
+          </div>
+        </div>
+        <span class="partner-name-text" id="partnerNameDisplay">Leo</span>
+        <span class="partner-status-dot"></span>
+      </div>
+
+      <div class="header-controls">
+        <!-- Theme Toggle Button -->
+        <button type="button" class="header-action-btn theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle theme">
+          <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.22" x2="5.64" y2="17.78"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Chat Messages Flow Container -->
+    <div class="chat-flow-container" id="chatFlowContainer">
+      <div class="chat-messages-wrapper" id="chatMessagesWrapper">
+        <!-- Messages will be rendered dynamically here -->
+      </div>
+      
+      <!-- Typing Indicator Container -->
+      <div class="typing-indicator-container hidden" id="typingIndicator">
+        <div class="typing-indicator-bubble">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating Chat Input Bar -->
+    <footer class="chat-input-bar">
+      <div class="input-container">
+        <textarea 
+          id="chatInputText" 
+          rows="1" 
+          placeholder="say something..." 
+          aria-label="Type your message"
+          maxlength="1000"
+        ></textarea>
+        <button type="button" class="send-btn" id="sendMessageBtn" aria-label="Send message" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </footer>
+  </main>
+
+  <!-- Elegant cinematic name-entry modal overlay -->
+  <div class="name-modal-overlay hidden" id="nameModalOverlay">
+    <div class="name-modal" id="nameModal">
+      <h2 class="name-modal-title">what should I call you?</h2>
+      <div class="name-input-container">
+        <input type="text" id="nicknameInput" placeholder="your name..." maxlength="20" autocomplete="off">
+        <button type="button" class="name-continue-btn" id="nameContinueBtn" aria-label="Continue" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Script Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
