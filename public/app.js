@@ -11,7 +11,8 @@ const state = {
   userProfile: {
     name: ''              // user's nickname
   },
-  typingTimeoutId: null   // tracks active typing timeout to prevent duplicates/stuck states
+  typingTimeoutId: null,  // tracks active typing timeout to prevent duplicates/stuck states
+  activeAbortController: null // tracks active fetch requests to prevent stuck or duplicate states
 };
 
 // Language Detection Helper
@@ -161,12 +162,7 @@ function handleNameSubmit() {
 }
 
 function navigateToChat(character) {
-  if (state.typingTimeoutId) {
-    clearTimeout(state.typingTimeoutId);
-    state.typingTimeoutId = null;
-  }
-  hideTypingIndicator();
-  setChatInputState(true);
+  cancelActiveRequests();
 
   state.activeCharacter = character;
   state.history = [];
@@ -195,12 +191,7 @@ function navigateToChat(character) {
 }
 
 function navigateToLanding() {
-  if (state.typingTimeoutId) {
-    clearTimeout(state.typingTimeoutId);
-    state.typingTimeoutId = null;
-  }
-  hideTypingIndicator();
-  setChatInputState(true);
+  cancelActiveRequests();
 
   state.activeCharacter = null;
   state.pendingCharacter = null;
@@ -228,6 +219,21 @@ function setChatInputState(enabled, characterName = '') {
 
 // Render clean, non-technical companion immersive errors inside peer bubble
 function renderImmersiveError(characterName) {
+  // Guard against rendering consecutive error bubbles to prevent spam
+  if (elements.chatMessagesWrapper) {
+    const lastRow = elements.chatMessagesWrapper.lastElementChild;
+    if (lastRow && lastRow.classList.contains('peer')) {
+      const lastBubble = lastRow.querySelector('.message-bubble');
+      if (lastBubble) {
+        const text = lastBubble.textContent;
+        if (text.includes('connection got weird') || text.includes('disappeared for a second')) {
+          // Already showing an error bubble at the bottom. Do not duplicate.
+          return;
+        }
+      }
+    }
+  }
+
   const nameFormatted = characterName.charAt(0).toUpperCase() + characterName.slice(1);
   const msg = Math.random() > 0.5 
     ? `connection got weird for a moment...` 
@@ -258,6 +264,52 @@ function renderMessage(role, text) {
 
 function scrollToBottom() {
   elements.chatFlowContainer.scrollTop = elements.chatFlowContainer.scrollHeight;
+}
+
+// Central clean-up pass to maintain a mathematically clean single-state chat flow at all times.
+// Removes orphan typing states, stale pending fetch operations, and duplicate fallback bubbles.
+function cancelActiveRequests() {
+  // 1. Clear any active setTimeout timing simulation
+  if (state.typingTimeoutId) {
+    clearTimeout(state.typingTimeoutId);
+    state.typingTimeoutId = null;
+  }
+
+  // 2. Abort any active pending HTTP requests
+  if (state.activeAbortController) {
+    state.activeAbortController.abort();
+    state.activeAbortController = null;
+  }
+
+  // 3. Hide primary typing indicator
+  hideTypingIndicator();
+
+  // 4. Reset input element state back to default enabled
+  setChatInputState(true);
+
+  // 5. Defensive DOM Pruning: Scan and remove any duplicate consecutive error bubbles
+  if (elements.chatMessagesWrapper) {
+    const rows = Array.from(elements.chatMessagesWrapper.querySelectorAll('.message-row'));
+    let consecutiveErrorCount = 0;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const row = rows[i];
+      const bubble = row.querySelector('.message-bubble');
+      if (bubble && row.classList.contains('peer')) {
+        const text = bubble.textContent;
+        const isError = text.includes('connection got weird') || text.includes('disappeared for a second');
+        if (isError) {
+          consecutiveErrorCount++;
+          if (consecutiveErrorCount > 1) {
+            row.remove();
+          }
+        } else {
+          consecutiveErrorCount = 0;
+        }
+      } else {
+        consecutiveErrorCount = 0;
+      }
+    }
+  }
 }
 
 function showTypingIndicator() {
@@ -348,11 +400,7 @@ function calculateTextDelay(text) {
 
 // Auto-greeting trigger
 async function triggerInitialGreeting() {
-  // Clear any existing typing timeouts
-  if (state.typingTimeoutId) {
-    clearTimeout(state.typingTimeoutId);
-    state.typingTimeoutId = null;
-  }
+  cancelActiveRequests();
 
   showTypingIndicator();
   setChatInputState(false, state.activeCharacter || 'leo');
@@ -360,6 +408,8 @@ async function triggerInitialGreeting() {
   const detectedLang = detectUserLanguage();
   const promptText = `(System: The user has just opened the chat room. Automatically reply with a warm, casual greeting matching your core personality in their browser language. My detected language is: ${detectedLang}. Keep it short, casual, and highly welcoming, e.g., asking how my day was or how I am doing. Do not say "How can I help you?". Just act like a friend saying hello. User's nickname is: ${state.userProfile.name || 'none'})`;
   
+  state.activeAbortController = new AbortController();
+
   try {
     const startTime = Date.now();
     const reply = await sendChatRequest(promptText, true); // true indicates a hidden system greeting trigger
@@ -381,8 +431,8 @@ async function triggerInitialGreeting() {
     }, waitTime);
     
   } catch (error) {
-    hideTypingIndicator();
-    setChatInputState(true);
+    if (error.name === 'AbortError') return;
+    cancelActiveRequests();
     console.error('Failed to trigger greeting:', error);
     renderImmersiveError(state.activeCharacter || 'leo');
   }
@@ -413,7 +463,8 @@ async function sendChatRequest(messageText, isHiddenGreeting = false) {
       messages: messagePayload,
       localTime: getClientLocalTime(),
       userVibe: userVibeLabel
-    })
+    }),
+    signal: state.activeAbortController ? state.activeAbortController.signal : null
   });
 
   const data = await response.json();
@@ -433,11 +484,7 @@ async function handleUserSendMessage() {
   const text = elements.chatInputText.value.trim();
   if (!text) return;
   
-  // Clear any existing typing timeouts
-  if (state.typingTimeoutId) {
-    clearTimeout(state.typingTimeoutId);
-    state.typingTimeoutId = null;
-  }
+  cancelActiveRequests();
 
   // 1. Clear Input and Disable State
   elements.chatInputText.value = '';
@@ -451,6 +498,7 @@ async function handleUserSendMessage() {
   // 3. Show typing indicator
   showTypingIndicator();
   
+  state.activeAbortController = new AbortController();
   const startTime = Date.now();
   
   try {
@@ -470,8 +518,8 @@ async function handleUserSendMessage() {
     }, waitTime);
     
   } catch (error) {
-    hideTypingIndicator();
-    setChatInputState(true);
+    if (error.name === 'AbortError') return;
+    cancelActiveRequests();
     console.error('Chat error:', error);
     renderImmersiveError(state.activeCharacter || 'leo');
   }
@@ -548,6 +596,16 @@ function setupEventListeners() {
 // ==========================================================================
 
 function setupImmersiveControls() {
+  // Suspend DevTools, right-click, and History API blocks on localhost / development
+  const isDevelopment = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' || 
+                        window.location.protocol === 'file:';
+  
+  if (isDevelopment) {
+    console.log("Leo & Lia: Development mode detected. Keyboard, navigation, and Inspect Element limits are suspended.");
+    return;
+  }
+
   // 1. Disable Right Click Context Menu
   window.addEventListener('contextmenu', (e) => {
     e.preventDefault();
