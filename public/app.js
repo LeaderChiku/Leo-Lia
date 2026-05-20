@@ -625,6 +625,8 @@ function setupEventListeners() {
 // Standalone Immersive Controls (Browser Interception & Protection)
 // ==========================================================================
 
+/* 
+// Temporarily disabled globally until the platform is fully stable and debugged.
 function setupImmersiveControls() {
   // Suspend DevTools, right-click, and History API blocks on localhost / development
   const isDevelopment = window.location.hostname === 'localhost' || 
@@ -694,14 +696,12 @@ function setupImmersiveControls() {
     }
   });
 }
+*/
 
 // App Initialization
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
   setupEventListeners();
-  if (isDevelopmentEnvironment) {
-    console.log("[Leo & Lia] Dev mode detected — browser protections disabled.");
-  } else {
-    setupImmersiveControls();
-  }
+  // Immersive browser protections are temporarily disabled globally for debugging/production inspection.
+  console.log("[Leo & Lia] Immersive browser protections are temporarily disabled globally.");
 });
