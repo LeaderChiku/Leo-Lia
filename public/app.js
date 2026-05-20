@@ -12,8 +12,38 @@ const state = {
     name: ''              // user's nickname
   },
   typingTimeoutId: null,  // tracks active typing timeout to prevent duplicates/stuck states
-  activeAbortController: null // tracks active fetch requests to prevent stuck or duplicate states
+  activeAbortController: null, // aborts pending requests on view changes
 };
+
+// Comprehensive development environment check (localhost, loopbacks, file protocol, local network IPs)
+const isDevelopmentEnvironment = (() => {
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+
+  if (protocol === 'file:') return true;
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '') return true;
+  if (hostname.endsWith('.local')) return true;
+
+  // Class A private network: 10.0.0.0 - 10.255.255.255
+  if (hostname.startsWith('10.')) return true;
+
+  // Class C private network: 192.168.0.0 - 192.168.255.255
+  if (hostname.startsWith('192.168.')) return true;
+
+  // Class B private network: 172.16.0.0 - 172.31.255.255
+  if (hostname.startsWith('172.')) {
+    const parts = hostname.split('.');
+    if (parts.length >= 2) {
+      const secondPart = parseInt(parts[1], 10);
+      if (!isNaN(secondPart) && secondPart >= 16 && secondPart <= 31) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+})();
+
 
 // Language Detection Helper
 function detectUserLanguage() {
@@ -669,5 +699,9 @@ function setupImmersiveControls() {
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
   setupEventListeners();
-  setupImmersiveControls();
+  if (isDevelopmentEnvironment) {
+    console.log("[Leo & Lia] Dev mode detected — browser protections disabled.");
+  } else {
+    setupImmersiveControls();
+  }
 });
