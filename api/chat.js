@@ -2,6 +2,12 @@
 // Leo & Lia — Vercel Serverless API Route for Gemini Chat Proxy
 // ==========================================================================
 
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error("Missing GEMINI_API_KEY");
+}
+
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
 module.exports = async (req, res) => {
 
   // ── Diagnostics: confirm environment is wired correctly ──────────────────
@@ -21,13 +27,6 @@ module.exports = async (req, res) => {
     if (!character || !messages || !Array.isArray(messages) || messages.length === 0) {
       console.error('[Leo & Lia] Bad request — missing character or messages.');
       return res.status(400).json({ error: 'INVALID_REQUEST' });
-    }
-
-    // ── API Key guard ──────────────────────────────────────────────────────
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error('[Leo & Lia] GEMINI_API_KEY is not set in environment variables.');
-      return res.status(500).json({ error: 'API_KEY_MISSING' });
     }
 
     // ── Personality system prompts ─────────────────────────────────────────
@@ -129,67 +128,45 @@ If it's late at night, acknowledge it softly sometimes.
       parts: [{ text: msg.text }]
     }));
 
-    // ── Gemini API call ────────────────────────────────────────────────────
-    // Model: gemini-1.5-flash-latest on v1beta — stable, production-safe
-    const GEMINI_MODEL = 'gemini-1.5-flash-latest';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
-
-    console.log('[Leo & Lia] Calling Gemini model:', GEMINI_MODEL);
+    // ── Gemini SDK Call ────────────────────────────────────────────────────
+    console.log('[Leo & Lia] Calling Gemini model: gemini-1.5-flash');
 
     const requestStart = Date.now();
 
-    const geminiResponse = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: geminiContents,
-        systemInstruction: {
-          parts: [{ text: systemInstruction }]
-        },
-        generationConfig: {
-          temperature: 1.0,
-          topP: 0.95,
-          topK: 40,
-          maxOutputTokens: 1024
-        }
-      })
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      systemInstruction: systemInstruction,
+      generationConfig: {
+        temperature: 1.0,
+        topP: 0.95,
+        topK: 40,
+        maxOutputTokens: 1024
+      }
     });
 
+    const result = await model.generateContent({
+      contents: geminiContents
+    });
+
+    const response = await result.response;
+    const replyText = response.text();
+
     const elapsed = Date.now() - requestStart;
-    console.log(`[Leo & Lia] Gemini responded in ${elapsed}ms — HTTP ${geminiResponse.status}`);
-
-    // ── Safe JSON parsing — Gemini can return non-JSON on certain errors ───
-    const rawText = await geminiResponse.text();
-    let data;
-
-    try {
-      data = JSON.parse(rawText);
-    } catch (parseErr) {
-      console.error('[Leo & Lia] Gemini returned non-JSON body:', rawText.slice(0, 500));
-      return res.status(500).json({ error: 'TEMPORARY_CHAT_FAILURE' });
-    }
-
-    // ── Handle Gemini-level errors (bad model, quota, etc.) ───────────────
-    if (!geminiResponse.ok) {
-      console.error('[Leo & Lia] Gemini API error payload:', JSON.stringify(data?.error || data));
-      // Only send sanitized code to client — never raw Gemini errors
-      return res.status(500).json({ error: 'TEMPORARY_CHAT_FAILURE' });
-    }
-
-    // ── Extract text reply ─────────────────────────────────────────────────
-    const replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.log(`[Leo & Lia] Gemini SDK responded in ${elapsed}ms`);
 
     if (!replyText) {
-      console.error('[Leo & Lia] Gemini returned empty candidates:', JSON.stringify(data));
+      console.error('[Leo & Lia] Gemini SDK returned empty reply text');
       return res.status(500).json({ error: 'TEMPORARY_CHAT_FAILURE' });
     }
 
     // ── Success ────────────────────────────────────────────────────────────
-    return res.status(200).json({ reply: replyText });
+    return res.json({ reply: replyText });
 
   } catch (error) {
-    // Catch unexpected JS-level errors (network timeout, fetch failure, etc.)
-    console.error('[Leo & Lia] Unexpected server error:', error.message || error);
+    // Catch unexpected JS-level errors and SDK errors
+    console.error('[Leo & Lia] Server-side error:', error.stack || error.message || error);
+    // Return sanitized JSON, never leak raw Gemini/server stack traces to client
     return res.status(500).json({ error: 'TEMPORARY_CHAT_FAILURE' });
   }
 
