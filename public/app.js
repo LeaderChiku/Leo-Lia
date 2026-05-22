@@ -203,7 +203,7 @@ function navigateToChat(character) {
   elements.headerPartnerAvatar.alt = character.charAt(0).toUpperCase() + character.slice(1);
   applyTheme();
   
-  // 2. Render welcome message / triggers
+  // 2. Clear previous messages
   elements.chatMessagesWrapper.innerHTML = '';
   
   // 3. Slide Views and Hide Modals
@@ -216,8 +216,9 @@ function navigateToChat(character) {
     elements.chatInputText.focus();
   }, 500);
   
-  // 5. Trigger first language-specific hello reply from bot
-  triggerInitialGreeting();
+  // 5. Auto-greeting is temporarily DISABLED for deployment stability.
+  //    It will be re-enabled after full Gemini integration is confirmed.
+  //    triggerInitialGreeting();
 }
 
 function navigateToLanding() {
@@ -497,13 +498,19 @@ async function sendChatRequest(messageText, isHiddenGreeting = false) {
     signal: state.activeAbortController ? state.activeAbortController.signal : null
   });
 
-  const data = await response.json();
-  
-  if (!response.ok) {
-    if (data.error === 'API_KEY_MISSING') {
-      throw new Error('API_KEY_MISSING');
-    }
-    throw new Error(data.message || 'API request failed.');
+  // Safe parse — backend may return non-JSON in edge cases
+  let data;
+  try {
+    data = await response.json();
+  } catch (parseErr) {
+    console.error('[Leo & Lia] Non-JSON response from /api/chat:', parseErr);
+    throw new Error('TEMPORARY_CHAT_FAILURE');
+  }
+
+  if (!response.ok || data.error) {
+    // Log backend error code for diagnostics, never show it in the UI
+    console.error('[Leo & Lia] API error code:', data?.error);
+    throw new Error('TEMPORARY_CHAT_FAILURE');
   }
 
   return data.reply;

@@ -4,50 +4,39 @@
 
 module.exports = async (req, res) => {
 
-  // Only allow POST requests
+  // ── Diagnostics: confirm environment is wired correctly ──────────────────
+  console.log('[Leo & Lia] /api/chat invoked at', new Date().toISOString());
+  console.log('[Leo & Lia] Gemini key exists:', !!process.env.GEMINI_API_KEY);
+
+  // ── Only allow POST ───────────────────────────────────────────────────────
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
-
-    return res.status(405).json({
-      error: 'Method Not Allowed',
-      message: 'Only POST requests are supported.'
-    });
+    return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
   }
 
   try {
-
     const { character, messages, localTime, userVibe } = req.body || {};
 
-    // Validate request
-    if (!character || !messages || !Array.isArray(messages)) {
-      return res.status(400).json({
-        error: 'Invalid Request',
-        message: 'Missing required parameters.'
-      });
+    // ── Input validation ───────────────────────────────────────────────────
+    if (!character || !messages || !Array.isArray(messages) || messages.length === 0) {
+      console.error('[Leo & Lia] Bad request — missing character or messages.');
+      return res.status(400).json({ error: 'INVALID_REQUEST' });
     }
 
-    // Environment variable
+    // ── API Key guard ──────────────────────────────────────────────────────
     const apiKey = process.env.GEMINI_API_KEY;
-
     if (!apiKey) {
-      return res.status(500).json({
-        error: 'API_KEY_MISSING',
-        message: 'Gemini API key missing in Vercel environment variables.'
-      });
+      console.error('[Leo & Lia] GEMINI_API_KEY is not set in environment variables.');
+      return res.status(500).json({ error: 'API_KEY_MISSING' });
     }
 
-    // ----------------------------------------------------------------------
-    // Personality System
-    // ----------------------------------------------------------------------
-
+    // ── Personality system prompts ─────────────────────────────────────────
     let systemInstruction = '';
-
     const formattedVibe = userVibe || 'general';
 
     if (character.toLowerCase() === 'leo') {
 
-      systemInstruction = `
-You are Leo.
+      systemInstruction = `You are Leo.
 
 You are NOT an AI assistant.
 
@@ -91,8 +80,7 @@ If it's late night, occasionally mention it naturally.
 
     } else if (character.toLowerCase() === 'lia') {
 
-      systemInstruction = `
-You are Lia.
+      systemInstruction = `You are Lia.
 
 You are NOT an AI assistant.
 
@@ -131,53 +119,35 @@ If it's late at night, acknowledge it softly sometimes.
 `;
 
     } else {
-
-      return res.status(400).json({
-        error: 'Invalid Character'
-      });
-
+      console.error('[Leo & Lia] Invalid character:', character);
+      return res.status(400).json({ error: 'INVALID_CHARACTER' });
     }
 
-    // ----------------------------------------------------------------------
-    // Convert Messages
-    // ----------------------------------------------------------------------
-
+    // ── Format messages for Gemini ─────────────────────────────────────────
     const geminiContents = messages.map((msg) => ({
       role: msg.role === 'model' ? 'model' : 'user',
-      parts: [
-        {
-          text: msg.text
-        }
-      ]
+      parts: [{ text: msg.text }]
     }));
 
-    // ----------------------------------------------------------------------
-    // Gemini API
-    // ----------------------------------------------------------------------
+    // ── Gemini API call ────────────────────────────────────────────────────
+    // Model: gemini-1.5-flash-latest on v1beta — stable, production-safe
+    const GEMINI_MODEL = 'gemini-1.5-flash-latest';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
 
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    console.log('[Leo & Lia] Calling Gemini model:', GEMINI_MODEL);
 
-    const response = await fetch(url, {
+    const requestStart = Date.now();
+
+    const geminiResponse = await fetch(url, {
       method: 'POST',
-
-      headers: {
-        'Content-Type': 'application/json'
-      },
-
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: geminiContents,
-
         systemInstruction: {
-          parts: [
-            {
-              text: systemInstruction
-            }
-          ]
+          parts: [{ text: systemInstruction }]
         },
-
         generationConfig: {
-          temperature: 1,
+          temperature: 1.0,
           topP: 0.95,
           topK: 40,
           maxOutputTokens: 1024
@@ -185,71 +155,42 @@ If it's late at night, acknowledge it softly sometimes.
       })
     });
 
-    // ----------------------------------------------------------------------
-    // SAFE RESPONSE PARSING
-    // ----------------------------------------------------------------------
+    const elapsed = Date.now() - requestStart;
+    console.log(`[Leo & Lia] Gemini responded in ${elapsed}ms — HTTP ${geminiResponse.status}`);
 
-    const rawText = await response.text();
-
+    // ── Safe JSON parsing — Gemini can return non-JSON on certain errors ───
+    const rawText = await geminiResponse.text();
     let data;
 
     try {
-
       data = JSON.parse(rawText);
-
-    } catch (err) {
-
-      console.error('Invalid Gemini Response:', rawText);
-
-      throw new Error('Gemini returned invalid JSON.');
-
+    } catch (parseErr) {
+      console.error('[Leo & Lia] Gemini returned non-JSON body:', rawText.slice(0, 500));
+      return res.status(500).json({ error: 'TEMPORARY_CHAT_FAILURE' });
     }
 
-    // ----------------------------------------------------------------------
-    // Gemini Error Handling
-    // ----------------------------------------------------------------------
-
-    if (!response.ok) {
-
-      console.error('Gemini API Error:', data);
-
-      throw new Error(
-        data?.error?.message ||
-        'Gemini API request failed.'
-      );
-
+    // ── Handle Gemini-level errors (bad model, quota, etc.) ───────────────
+    if (!geminiResponse.ok) {
+      console.error('[Leo & Lia] Gemini API error payload:', JSON.stringify(data?.error || data));
+      // Only send sanitized code to client — never raw Gemini errors
+      return res.status(500).json({ error: 'TEMPORARY_CHAT_FAILURE' });
     }
 
-    // ----------------------------------------------------------------------
-    // Extract Reply
-    // ----------------------------------------------------------------------
-
-    const replyText =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    // ── Extract text reply ─────────────────────────────────────────────────
+    const replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!replyText) {
-      throw new Error('Empty Gemini response.');
+      console.error('[Leo & Lia] Gemini returned empty candidates:', JSON.stringify(data));
+      return res.status(500).json({ error: 'TEMPORARY_CHAT_FAILURE' });
     }
 
-    // ----------------------------------------------------------------------
-    // Success
-    // ----------------------------------------------------------------------
-
-    return res.status(200).json({
-      reply: replyText
-    });
+    // ── Success ────────────────────────────────────────────────────────────
+    return res.status(200).json({ reply: replyText });
 
   } catch (error) {
-
-    console.error('Server Error:', error);
-
-    return res.status(500).json({
-      error: 'SERVER_ERROR',
-      message:
-        error.message ||
-        'Unexpected server error.'
-    });
-
+    // Catch unexpected JS-level errors (network timeout, fetch failure, etc.)
+    console.error('[Leo & Lia] Unexpected server error:', error.message || error);
+    return res.status(500).json({ error: 'TEMPORARY_CHAT_FAILURE' });
   }
 
 };
