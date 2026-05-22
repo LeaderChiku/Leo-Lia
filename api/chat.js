@@ -123,9 +123,9 @@ If it's late at night, acknowledge it softly sometimes.
     }
 
     // ── Format messages for Gemini ─────────────────────────────────────────
-    const geminiContents = messages.map((msg) => ({
-      role: msg.role === 'model' ? 'model' : 'user',
-      parts: [{ text: msg.text }]
+    const geminiContents = messages.map((message) => ({
+      role: message.role === "assistant" ? "model" : "user",
+      parts: [{ text: message.text }]
     }));
 
     // ── Gemini SDK Call ────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ If it's late at night, acknowledge it softly sometimes.
       contents: geminiContents
     });
 
-    const response = await result.response;
+    const response = result.response;
     const replyText = response.text();
 
     const elapsed = Date.now() - requestStart;
@@ -164,10 +164,13 @@ If it's late at night, acknowledge it softly sometimes.
     return res.json({ reply: replyText });
 
   } catch (error) {
-    // Catch unexpected JS-level errors and SDK errors
-    console.error('[Leo & Lia] Server-side error:', error.stack || error.message || error);
-    // Return sanitized JSON, never leak raw Gemini/server stack traces to client
-    return res.status(500).json({ error: 'TEMPORARY_CHAT_FAILURE' });
+    console.error("[Leo & Lia] FULL GEMINI ERROR:");
+    console.error(error);
+    console.error(error?.stack);
+
+    return res.status(500).json({
+      error: "TEMPORARY_CHAT_FAILURE"
+    });
   }
 
 };
