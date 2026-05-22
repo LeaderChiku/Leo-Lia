@@ -157,7 +157,7 @@ If it's late at night, acknowledge it softly sometimes.
 
     if (!replyText) {
       console.error('[Leo & Lia] Gemini SDK returned empty reply text');
-      return res.status(500).json({ error: 'TEMPORARY_CHAT_FAILURE' });
+      return res.status(500).json({ error: 'Gemini SDK returned empty reply text' });
     }
 
     // ── Success ────────────────────────────────────────────────────────────
@@ -169,7 +169,9 @@ If it's late at night, acknowledge it softly sometimes.
     console.error(error?.stack);
 
     return res.status(500).json({
-      error: "TEMPORARY_CHAT_FAILURE"
+      error: error?.message || "UNKNOWN_SERVER_ERROR",
+      stack: error?.stack,
+      details: JSON.stringify(error, null, 2)
     });
   }
 

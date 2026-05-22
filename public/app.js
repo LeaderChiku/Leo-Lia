@@ -504,13 +504,16 @@ async function sendChatRequest(messageText, isHiddenGreeting = false) {
     data = await response.json();
   } catch (parseErr) {
     console.error('[Leo & Lia] Non-JSON response from /api/chat:', parseErr);
-    throw new Error('TEMPORARY_CHAT_FAILURE');
+    throw new Error('NON_JSON_BACKEND_ERROR');
   }
 
-  if (!response.ok || data.error) {
-    // Log backend error code for diagnostics, never show it in the UI
-    console.error('[Leo & Lia] API error code:', data?.error);
-    throw new Error('TEMPORARY_CHAT_FAILURE');
+  if (!response.ok || data?.error) {
+    console.error("[Leo & Lia] RAW BACKEND ERROR:", data);
+    throw new Error(
+      data?.details ||
+      data?.error ||
+      "UNKNOWN_BACKEND_ERROR"
+    );
   }
 
   return data.reply;
