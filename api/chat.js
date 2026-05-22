@@ -129,13 +129,13 @@ If it's late at night, acknowledge it softly sometimes.
     }));
 
     // ── Gemini SDK Call ────────────────────────────────────────────────────
-    console.log('[Leo & Lia] Calling Gemini model: gemini-1.5-flash');
+    console.log('[Leo & Lia] Calling Gemini model: gemini-1.5-flash-latest');
 
     const requestStart = Date.now();
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-latest',
       systemInstruction: systemInstruction,
       generationConfig: {
         temperature: 1.0,
